@@ -1,0 +1,72 @@
+{
+  "medicaments": [
+    {
+      "name": "Bimalaril",
+      "prixU": "2500"
+    },
+    {
+      "name": "Chloroquine",
+      "prixU": "1750"
+    },
+    {
+      "name": "Paracétamol",
+      "prixU": "500"
+    }
+  ],
+
+  "symptômes": [
+    {
+      "name": "Fièvre"
+    },
+    {
+      "name": "Toux"
+    },
+    {
+      "name": "Maux de tête"
+    },
+    {
+      "name": "Manque d'appetit "
+    },
+    {
+      "name": "Selles liquide"
+    },
+    {
+      "name": "anxiété"
+    }
+  ],
+
+  "Maladies": [
+    {
+      "name": "Paludisme",
+      "medicaments": [
+        {
+          "name": "Bimalaril"
+        }
+      ],
+      "must_cure": false,
+      "symptomes": [
+        {
+          "name": "Fièvre"
+        }
+      ]
+    },
+
+    {
+        "name": "Corona",
+        "medicaments": [
+          {
+            "name": "Chloroquine"
+          }
+        ],
+        "must_cure": true,
+        "symptomes": [
+          {
+            "name": "Fièvre"
+          },
+          {
+            "name": "Maux de tête"
+          }
+        ]
+      }
+  ]
+}
