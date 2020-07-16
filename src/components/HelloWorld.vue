@@ -144,11 +144,14 @@
                             </tr>
                           </thead>
                           <tbody>
-                            <tr v-for="item in patient_examining" :key="item.patient.nom">
-                              <td>{{item.laborantin.id}}</td>
-                              <td>{{item.patient.nom}}</td>
-                              <td>{{item.examen}}</td>
-                              <td>{{item.maladie}}</td>
+                            <tr
+                              v-for="item in patient_examining"
+                              :key="item.patient.nom"
+                            >
+                              <td>{{ item.laborantin.id }}</td>
+                              <td>{{ item.patient.nom }}</td>
+                              <td>{{ item.examen }}</td>
+                              <td>{{ item.maladie }}</td>
                             </tr>
                           </tbody>
                         </template>
@@ -171,14 +174,17 @@
                             <tr>
                               <th class="text-left">N Patients</th>
                               <th class="text-left">Medicament</th>
-                              <th class="text-left">Prix</th>
+                              <th class="text-left">Action</th>
                             </tr>
                           </thead>
                           <tbody>
-                            <tr>
-                              <td>22</td>
-                              <td>Paracétamol</td>
-                              <td>500</td>
+                            <tr
+                              v-for="item in patient_buying_med"
+                              :key="item.patient.guid()"
+                            >
+                              <td>{{ item.patient.nom }}</td>
+                              <td>{{ item.medicaments }}</td>
+                              <td>{{ item.achat }}</td>
                             </tr>
                           </tbody>
                         </template>
@@ -209,7 +215,7 @@
                               :key="notif.id"
                             >
                               <td>{{ notif.id }}</td>
-                              <td>{{ notif.message }}</td>
+                              <td> <font :color="notif.cat"> {{ notif.message }} </font></td>
                             </tr>
                           </tbody>
                         </template>
@@ -430,6 +436,7 @@ function move_free(item, liste, free) {
 const MESSAGE_TYPE = {
   MEDECIN: {
     SEND_PATIENT: "SEND_PATIENT",
+    TAKE_PRESCRIPTION: "TAKE_PRESCRIPTION",
   },
   CASSIERE: {
     GO_MEDECIN: "GO_MEDECIN",
@@ -438,10 +445,11 @@ const MESSAGE_TYPE = {
   PATIENT: {
     PAY_CONSULT: "PAY_CONSULT",
     CONSULT_ME: "CONSULT_ME",
+    GIVE_PRESCRIPTION: "GIVE_PRESCRIPTION",
   },
   LABORATIN: {
-    EXAM_AVAILABLE: "EXAM_AVAILABLE"
-  }
+    EXAM_AVAILABLE: "EXAM_AVAILABLE",
+  },
 };
 
 //fonctions utiles
@@ -466,6 +474,7 @@ export default {
     patient_paying_fact: [],
     patient_consulting: [],
     patient_examining: [],
+    patient_buying_med: [],
 
     medecins: {
       libres: [],
@@ -503,12 +512,24 @@ export default {
       console.log(randomNameGenerator.first());
     },
 
+    makeNotification(message, cat){
+      this.notifications_messages.unshift({
+        id: this.notifications_messages.length,
+        message: message,
+        cat: cat
+      });
+    },
+
     runSimulation() {
       //definition des variables
       var patient_waiting = this.patient_waiting;
       var patient_paying_fact = this.patient_paying_fact;
       var patient_consulting = this.patient_consulting;
       var patient_examining = this.patient_examining;
+      var patient_buying_med = this.patient_buying_med;
+
+      //fonctions utiles
+      var makeNotification = this.makeNotification;
 
       var notifications_list = this.notifications_messages;
       var medecins_list = this.medecins;
@@ -556,7 +577,25 @@ export default {
               });
               break;
             case MESSAGE_TYPE.LABORATIN.EXAM_AVAILABLE:
-              console.log('Je souffre de', msg.content.maladie);
+              console.log("Je souffre de", msg.content.maladie);
+              this.sendMsg(msg.content.medecin.id, {
+                type: MESSAGE_TYPE.PATIENT.GIVE_PRESCRIPTION,
+                content: msg.content,
+              });
+              break;
+            case MESSAGE_TYPE.MEDECIN.TAKE_PRESCRIPTION:
+              var index = patient_examining.indexOf(msg.content);
+              if (index > -1) {
+                patient_examining.splice(index, 1);
+              }
+              msg.content.pharmacien = pharmacien;
+              msg.content.achat = "EN COURS";
+              patient_buying_med.push(msg.content);
+              this.sendMsg(pharmacien.guid(), {
+                type: MESSAGE_TYPE.PATIENT.GIVE_PRESCRIPTION,
+                content: msg.content,
+              });
+
               break;
           }
         }
@@ -577,8 +616,6 @@ export default {
       CaissiereAgent.prototype = Object.create(jssim.SimEvent.prototype);
       CaissiereAgent.prototype.update = function(deltaTime) {
         if (this.libre) {
-          //appeler un patient pour lui donner un numéro
-          //TODO MOVE PATIENT TO CAISSE
           if (patient_waiting.length != 0) {
             let pat = patient_waiting.shift();
             let patient_id = pat.guid();
@@ -610,8 +647,10 @@ export default {
               //TODO SAVE TO CONSULTATION PAY LIST
               //TODO show notification
               this.current_service.etat = "Finish";
+              makeNotification(this.current_service.patient.nom + ' a payé la consultation et a recu le numero ' 
+              + this.current_service.patient.order_number, 'blue');
               this.libre = true;
-              move_free(this, caissieres_list, this.libre);
+              //move_free(this, caissieres_list, this.libre);
               break;
             case MESSAGE_TYPE.MEDECIN.SEND_PATIENT:
               if (
@@ -619,7 +658,6 @@ export default {
                 patient_paying_fact[patient_paying_fact.length - 1].etat ==
                   "Finish"
               ) {
-                console.log("Que oohh j'ai trouvé un gar a send");
 
                 let patient = patient_paying_fact.shift();
                 let patient_consult_item = {
@@ -627,6 +665,8 @@ export default {
                   medecin: msg.content,
                   examen: "EN COURS",
                 };
+                makeNotification(patient_consult_item.patient.nom + 'entre chez le medecin ' 
+                + patient_consult_item.medecin.id , 'orange' );
                 patient_consulting.unshift(patient_consult_item);
                 this.sendMsg(patient.patient.guid(), {
                   type: MESSAGE_TYPE.MEDECIN.SEND_PATIENT,
@@ -660,6 +700,8 @@ export default {
               medecin: this.medecin_waiting.msg_content,
               examen: "EN COURS",
             };
+            makeNotification(patient_consult_item.patient.nom + 'entre chez le medecin ' 
+                + patient_consult_item.medecin.id , 'orange' );
 
             patient_consulting.unshift(patient_consult_item);
             this.sendMsg(patient.patient.guid(), {
@@ -684,8 +726,7 @@ export default {
         var patient = new PatientAgent(name, []);
         var start_time = 12;
         patient_waiting.push(patient);
-        let notif_message = name + " est arrivé";
-        createNotification(notif_message, notifications_list);
+        makeNotification(name + ' est arrivé', 'white');
         scheduler.scheduleRepeatingAt(patient, scheduler.current_time, 60);
       };
 
@@ -698,20 +739,26 @@ export default {
       MedecinAgent.prototype = Object.create(jssim.SimEvent.prototype);
       MedecinAgent.prototype.update = function(deltaTime) {
         var inbox_messages = this.readInBox();
-        for(var i = 0 ; i < inbox_messages.length; i++){
+        for (var i = 0; i < inbox_messages.length; i++) {
           let msg = inbox_messages[i];
           let msg_type = msg.type;
           let sender_id = msg.sender;
 
-          switch(msg_type){
+          switch (msg_type) {
             case MESSAGE_TYPE.PATIENT.CONSULT_ME:
               var examen = exam_list(msg.symptomes);
               //TODO SAVE CONSULTATION
               msg.content.examen = examen;
               this.libre = true;
               break;
+            case MESSAGE_TYPE.PATIENT.GIVE_PRESCRIPTION:
+              var medicaments = "PARA";
+              msg.content.medicaments = medicaments;
+              this.sendMsg(msg.sender, {
+                type: MESSAGE_TYPE.MEDECIN.TAKE_PRESCRIPTION,
+                content: msg.content,
+              });
           }
-          
         }
 
         if (this.libre) {
@@ -732,10 +779,13 @@ export default {
         this.current_patient = null;
       };
       LaboAgent.prototype = Object.create(jssim.SimEvent.prototype);
-      LaboAgent.prototype.update = function(deltaTime){
-        if(this.libre){
-          if(patient_consulting.length !=0 && 
-          patient_consulting[patient_consulting.length-1].examen !="EN COURS"){
+      LaboAgent.prototype.update = function(deltaTime) {
+        if (this.libre) {
+          if (
+            patient_consulting.length != 0 &&
+            patient_consulting[patient_consulting.length - 1].examen !=
+              "EN COURS"
+          ) {
             var patient_exam_item = patient_consulting.shift();
             patient_exam_item.maladie = "En cours ...";
             patient_exam_item.laborantin = this;
@@ -743,36 +793,62 @@ export default {
             this.current_patient = patient_exam_item;
             this.libre = false;
           }
-          else{
-            this.current_patient.maladie = "PALU";
-            this.sendMsg(this.current_patient.patient.guid(), {
-              type: MESSAGE_TYPE.LABORATIN.EXAM_AVAILABLE,
-              content: this.current_patient,
-            })
-            this.libre = true;
+        } else {
+          this.current_patient.maladie = "PALU";
+          this.sendMsg(this.current_patient.patient.guid(), {
+            type: MESSAGE_TYPE.LABORATIN.EXAM_AVAILABLE,
+            content: this.current_patient,
+          });
+          this.libre = true;
+        }
+      };
+
+      var PharmacieAgent = function(id) {
+        jssim.SimEvent.call(this);
+        this.id = id;
+        this.libre = true;
+      };
+      PharmacieAgent.prototype = Object.create(jssim.SimEvent.prototype);
+      PharmacieAgent.prototype.update = function(deltaTime) {
+        var inbox_messages = this.readInBox();
+        for (var i = 0; i < inbox_messages.length; i++) {
+          let msg = inbox_messages[i];
+          let msg_type = msg.type;
+          let sender_id = msg.sender;
+          switch (msg_type) {
+            case MESSAGE_TYPE.PATIENT.GIVE_PRESCRIPTION:
+              //TODO SAVE
+              console.log(msg);
+
+              msg.content.achat = "FIN";
+              var index = patient_buying_med.indexOf(msg.content);
+              if (index > -1) {
+                patient_buying_med.splice(index, 1);
+              }
           }
         }
-      }
+      };
 
       var caissiere1 = new CaissiereAgent(777);
       var caissiere2 = new CaissiereAgent(7777);
       var medecin1 = new MedecinAgent(33);
       var laborantin1 = new LaboAgent(27);
+      var pharmacien = new PharmacieAgent(134);
 
       this.medecins.libres.push(medecin1);
       this.caissieres.libres.push(caissiere1);
       this.caissieres.libres.push(caissiere2);
-      
 
       scheduler.scheduleRepeatingAt(caissiere1, 0, 3 * UNIT_TIME);
       scheduler.scheduleRepeatingAt(caissiere2, 0, 3 * UNIT_TIME);
       scheduler.scheduleRepeatingAt(medecin1, 0, 3 * UNIT_TIME);
       scheduler.scheduleRepeatingAt(laborantin1, 0, 3 * UNIT_TIME);
+      scheduler.scheduleRepeatingAt(pharmacien, 0, 3 * UNIT_TIME);
       scheduler.scheduleRepeatingAt(patient_spawn_evt, 0, 7 * UNIT_TIME);
 
       setInterval(() => {
         scheduler.update();
-      }, 1000);
+      }, 500);
     },
   },
 };
