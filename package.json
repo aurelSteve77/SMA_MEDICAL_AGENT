@@ -10,6 +10,8 @@
   "dependencies": {
     "core-js": "^3.6.5",
     "js-simulator": "^1.0.17",
+    "random-name": "^0.1.2",
+    "unique-names-generator": "^4.3.0",
     "vue": "^2.6.11",
     "vuetify": "^2.2.11"
   },
